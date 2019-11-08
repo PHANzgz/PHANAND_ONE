@@ -3,4 +3,4 @@ Documentation and details of the "ultimate" homemade CPU and 8bit computer with 
 
 This readme will be filled soon.
 
-![alt text](demo.gif)
+![Demo](https://i.imgur.com/sqphlnm.mp4)
