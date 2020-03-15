@@ -1212,11 +1212,80 @@ pollCMD:
     PUSH Rc
     PUSH Rd
     PUSH Si
-    PUSH Di
-
+    
+    ;Setup CTL registers
+    MOV Ra, #0x6C       ; CTL |= 0x6C
+    MOV Rb, CTL
+    OR Rb, Ra
+    MOV Ra, #0x6F       ; CTL &= 0x6F 0b01101111
+    AND Rb, Ra
+    MOV CTL, Rb
+    
     ;TODO
+    MOV Ra, #0xFF
+    .loop1:             ; dummy delay
+    DEC Ra
+    JNZ [#.loop1-start]
+    .continue1:
+    MOV Ra, #0x01 
+    MOV IN, Ra
+    CALL [#waitACK-start]
+    ; DATA = idle
+    MOV Ra, #0x42 
+    MOV IN, Ra
+    CALL [#waitACK-start]
+    ; DATA = 0x41
+    MOV Ra, #0xFF 
+    MOV IN, Ra
+    CALL [#waitACK-start]
+    ; DATA = 0x5A
 
-    POP Di
+    MOV IN, Ra
+    CALL [#waitACK-start]
+    ; DATA = data1
+    MOV Rc, IN              ; TODO
+    MOV IN, Ra
+    CALL [#waitACK-start]
+    ; DATA = data2
+    MOV Rb, IN              ; TODO
+    MOV Rd, Rb
+
+    ; print data 1
+    MOV Rb, #0x00
+    STO [#rv+26], Rb                        ; set uintToStr parameters
+    STO [#rv+27], Rc 
+    CALL [#uintToStr-start]
+    MOV Si, #rv+28                          ; Set Si to *str returned by uintToStr
+    STX [#rv+8], Si                         ; and store in writeString argument
+    MOV Ra, #0x00                           ; EOT char=\0
+    STO [#rv+13], Ra
+    MOV Ra, #0x01                           ; device = 1 (RAM)
+    STO [#rv+14], Ra
+    CALL [#writeString-start]               ; print converted integer string
+    
+    ; print separator
+    MOV Ra, #0x20                           ; print ' '
+    STO [#rv+7], Ra
+    CALL [#writeChar-start]
+
+    ; print data 2
+    STO [#rv+26], Rb                        ; set uintToStr parameters
+    STO [#rv+27], Rd 
+    CALL [#uintToStr-start]
+    MOV Si, #rv+28                          ; Set Si to *str returned by uintToStr
+    STX [#rv+8], Si                         ; and store in writeString argument
+    MOV Ra, #0x00                           ; EOT char=\0
+    STO [#rv+13], Ra
+    MOV Ra, #0x01                           ; device = 1 (RAM)
+    STO [#rv+14], Ra
+    CALL [#writeString-start]               ; print converted integer string
+
+    ;Reset IS and SS bit, so we use the kb
+    MOV Ra, #0xE3        ; CTL &= 0xE3
+    MOV Rb, CTL
+    AND Rb, Ra
+    MOV CTL, Rb
+
     POP Si
     POP Rd
     POP Rc
@@ -1225,6 +1294,28 @@ pollCMD:
     POP PC ; return
 
 endPollCMD:
+
+waitACK:
+    PUSH Ra
+    PUSH Rb
+
+    MOV Rb, #0x80       ; ACK bit mask
+    .loop:
+    MOV Ra, CTL
+    AND Ra, Rb          ; Isolate bit 7 CTL register
+    CMP Ra, Rb
+    JNZ [#.loop-start]
+
+    ;RESET ACK
+    MOV Ra, CTL
+    MOV Rb, #0x7F
+    AND Ra, Rb
+    MOV CTL, Ra
+
+    POP Rb
+    POP Ra
+    POP PC ; return
+endWaitACK:
 
 
 processCMD:
@@ -1328,7 +1419,6 @@ processCMD:
     MOV Ra, #0x00                           ; device = 0 (ROM)
     STO [#rv+14], Ra
     CALL [#writeString-start]               ; print notFound string and exit
-
 
     .exit:
     POP Si
@@ -1507,7 +1597,7 @@ kbEnd:
 
 #addr 0x3000
 string:
-    #str ">Console v0.54\n"
+    #str ">Console v0.57\n"
 notFound:
     #str "Command not found\n"
 error1:
